@@ -14,6 +14,11 @@ interface DashboardStore {
   removeWidget: (id: string) => void;
   updateWidget: (id: string, updates: Partial<WidgetConfig>) => void;
   updateLayouts: (layouts: WidgetLayout[]) => void;
+  /** Adjust grid w/h (and optionally x/y); clamps to minW/minH and 12 columns. */
+  updateWidgetLayout: (
+    id: string,
+    patch: Partial<Pick<WidgetLayout, 'w' | 'h' | 'x' | 'y'>>
+  ) => void;
   selectWidget: (id: string | null) => void;
   saveDashboard: () => Promise<void>;
   loadDashboard: () => Promise<void>;
@@ -21,6 +26,40 @@ interface DashboardStore {
 }
 
 const generateId = () => `widget-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+const GRID_COLS = 12;
+
+/** Fixes NaN/invalid persisted layout so inspector + resize behave (empty width field = NaN). */
+function clampLayoutItem(l: WidgetLayout): WidgetLayout {
+  const minW = l.minW ?? 1;
+  const minH = l.minH ?? 1;
+  let w = Number(l.w);
+  let h = Number(l.h);
+  if (!Number.isFinite(w)) w = minW;
+  if (!Number.isFinite(h)) h = minH;
+  w = Math.min(GRID_COLS, Math.max(minW, Math.round(w)));
+  h = Math.max(minH, Math.round(h));
+  let x = Number(l.x);
+  let y = Number(l.y);
+  if (!Number.isFinite(x)) x = 0;
+  if (!Number.isFinite(y)) y = 0;
+  x = Math.max(0, Math.round(x));
+  y = Math.max(0, Math.round(y));
+  if (x + w > GRID_COLS) x = Math.max(0, GRID_COLS - w);
+  return {
+    i: l.i,
+    x,
+    y,
+    w,
+    h,
+    minW: l.minW,
+    minH: l.minH,
+  };
+}
+
+function normalizeLayouts(layouts: WidgetLayout[]): WidgetLayout[] {
+  return layouts.map(clampLayoutItem);
+}
 
 const getNextPosition = (layouts: WidgetLayout[], w: number): { x: number; y: number } => {
   if (layouts.length === 0) return { x: 0, y: 0 };
@@ -168,13 +207,13 @@ export const useDashboardStore = create<DashboardStore>()(
           }),
           layouts: state.layouts.map(l => {
             if (l.i !== id) return l;
-            return {
+            return clampLayoutItem({
               ...l,
               minW: typeInfo.minW,
               minH: typeInfo.minH,
               w: Math.max(l.w, typeInfo.minW),
               h: Math.max(l.h, typeInfo.minH),
-            };
+            });
           }),
           isDirty: true,
         }));
@@ -197,7 +236,37 @@ export const useDashboardStore = create<DashboardStore>()(
       },
 
       updateLayouts: (layouts) => {
-        set({ layouts, isDirty: true });
+        set({ layouts: normalizeLayouts(layouts), isDirty: true });
+      },
+
+      updateWidgetLayout: (id, patch) => {
+        set((state) => ({
+          layouts: state.layouts.map((l) => {
+            if (l.i !== id) return l;
+            const next = { ...l, ...patch };
+            const minW = l.minW ?? 1;
+            const minH = l.minH ?? 1;
+            if (patch.w !== undefined) {
+              const nw = Number(patch.w);
+              next.w = Number.isFinite(nw)
+                ? Math.min(GRID_COLS, Math.max(minW, Math.round(nw)))
+                : l.w;
+            }
+            if (patch.h !== undefined) {
+              const nh = Number(patch.h);
+              next.h = Number.isFinite(nh) ? Math.max(minH, Math.round(nh)) : l.h;
+            }
+            if (patch.x !== undefined) {
+              next.x = Math.max(0, Math.min(GRID_COLS - next.w, patch.x));
+            }
+            if (patch.y !== undefined) {
+              next.y = Math.max(0, patch.y);
+            }
+            next.x = Math.min(next.x, Math.max(0, GRID_COLS - next.w));
+            return clampLayoutItem(next);
+          }),
+          isDirty: true,
+        }));
       },
 
       selectWidget: (id) => {
@@ -230,6 +299,17 @@ export const useDashboardStore = create<DashboardStore>()(
         widgets: state.widgets,
         layouts: state.layouts,
       }),
+      merge: (persisted, current) => {
+        if (!persisted || typeof persisted !== 'object') return current;
+        const p = persisted as { widgets?: unknown; layouts?: WidgetLayout[] };
+        return {
+          ...current,
+          ...p,
+          layouts: normalizeLayouts(
+            Array.isArray(p.layouts) ? p.layouts : current.layouts
+          ),
+        };
+      },
     }
   )
 );

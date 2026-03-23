@@ -37,8 +37,16 @@ const datasetSelectValue = (dataSource: string | undefined) =>
   dataSource && dataSource !== '' ? dataSource : SAMPLE_DATASET_VALUE;
 
 const WidgetInspector = () => {
-  const { widgets, selectedWidgetId, selectWidget, updateWidget, removeWidget, setWidgetType } =
-    useDashboardStore();
+  const {
+    widgets,
+    layouts,
+    selectedWidgetId,
+    selectWidget,
+    updateWidget,
+    updateWidgetLayout,
+    removeWidget,
+    setWidgetType,
+  } = useDashboardStore();
   const widget = widgets.find((w) => w.id === selectedWidgetId);
   const [descOpen, setDescOpen] = useState(false);
 
@@ -55,6 +63,16 @@ const WidgetInspector = () => {
   }
 
   const typeLabel = WIDGET_TYPES.find((t) => t.type === widget.type)?.label ?? widget.type;
+  const typeInfo = WIDGET_TYPES.find((t) => t.type === widget.type);
+  const layoutEntry = layouts.find((l) => l.i === widget.id);
+  const minW = layoutEntry?.minW ?? typeInfo?.minW ?? 1;
+  const minH = layoutEntry?.minH ?? typeInfo?.minH ?? 1;
+  const safeDim = (n: unknown, fallback: number) => {
+    const v = Number(n);
+    return Number.isFinite(v) ? Math.round(v) : fallback;
+  };
+  const gridW = safeDim(layoutEntry?.w, typeInfo?.defaultW ?? 6);
+  const gridH = safeDim(layoutEntry?.h, typeInfo?.defaultH ?? 4);
   const datasetOptions = datasetsForWidgetType(widget.type);
   const dsValue = datasetSelectValue(widget.dataSource);
   const description = typeof widget.config?.description === 'string' ? widget.config.description : '';
@@ -96,6 +114,52 @@ const WidgetInspector = () => {
             onChange={(e) => updateWidget(widget.id, { title: e.target.value })}
             className="h-8 text-sm"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs">Size on dashboard</Label>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Wider = more columns; taller = more rows. Drag the right or left edge to change width, the
+            bottom edge for height, or the bottom-right corner for both.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="widget-grid-w" className="text-[10px] text-muted-foreground">
+                Width (columns)
+              </Label>
+              <Input
+                id="widget-grid-w"
+                type="number"
+                min={minW}
+                max={12}
+                value={gridW}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (Number.isNaN(v)) return;
+                  updateWidgetLayout(widget.id, { w: v });
+                }}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="widget-grid-h" className="text-[10px] text-muted-foreground">
+                Height (rows)
+              </Label>
+              <Input
+                id="widget-grid-h"
+                type="number"
+                min={minH}
+                max={48}
+                value={gridH}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (Number.isNaN(v)) return;
+                  updateWidgetLayout(widget.id, { h: v });
+                }}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
         </div>
 
         <Collapsible

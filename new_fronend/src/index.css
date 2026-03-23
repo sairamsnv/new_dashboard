@@ -156,27 +156,35 @@
   box-shadow: 0 25px 50px -12px hsl(0 0% 0% / 0.25);
 }
 
+/* Load order: react-grid-layout/css first (main.tsx), then this file — we override opacity/size. */
 .react-grid-item > .react-resizable-handle {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
+  z-index: 2;
+  opacity: 0.5;
 }
 
-.react-grid-item > .react-resizable-handle::after {
+.react-grid-item:hover > .react-resizable-handle {
+  opacity: 1;
+}
+
+/* Corner grip only — do not style ::after on e/w/s or their library positioning breaks */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se::after {
   content: "";
   position: absolute;
   right: 4px;
   bottom: 4px;
-  width: 6px;
-  height: 6px;
-  border-right: 2px solid hsl(var(--muted-foreground) / 0.4);
-  border-bottom: 2px solid hsl(var(--muted-foreground) / 0.4);
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid hsl(var(--muted-foreground) / 0.55);
+  border-bottom: 2px solid hsl(var(--muted-foreground) / 0.55);
   border-radius: 0 0 2px 0;
   transition: border-color 150ms ease;
 }
 
-.react-grid-item:hover > .react-resizable-handle::after {
-  border-color: hsl(var(--primary) / 0.6);
+.react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se::after {
+  border-color: hsl(var(--primary) / 0.75);
 }
 
 .react-grid-item > .react-resizable-handle.react-resizable-handle-se {

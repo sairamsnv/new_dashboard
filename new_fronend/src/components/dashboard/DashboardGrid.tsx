@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import ReactGridLayout from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
 import { useDashboardStore } from '@/store/dashboardStore';
 import WidgetWrapper from './WidgetWrapper';
 import type { WidgetLayout } from '@/types/dashboard';
@@ -46,6 +45,8 @@ const DashboardGrid = () => {
         containerPadding={[0, 0] as [number, number]}
         isDraggable
         isResizable
+        /* se = corner; e/w = change width; s = change height — easier than corner-only */
+        resizeHandles={['se', 'e', 'w', 's']}
         draggableHandle=".drag-handle"
         onLayoutChange={handleLayoutChange}
         useCSSTransforms
