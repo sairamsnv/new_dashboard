@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+venv/
+.venv/
+backend/rareenv/
+backend/rare_wms_env/
+
+# Node
+node_modules/
+dist/
+
+# Env & local
+.env
+.env.*
+!.env.example
+
+# Django
+backend/staticfiles/
+*.sqlite3
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
