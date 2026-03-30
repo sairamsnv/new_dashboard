@@ -1,18 +1,28 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
     hmr: {
       overlay: false,
     },
+    // Proxy /auth/* and /api/* to Django backend (avoids CORS in dev)
+    proxy: {
+      "/auth": {
+        target: process.env.VITE_WMS_API_BASE_URL || "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/api": {
+        target: process.env.VITE_WMS_API_BASE_URL || "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

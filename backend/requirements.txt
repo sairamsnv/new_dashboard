@@ -6,6 +6,9 @@ dj-database-url==3.0.0
 Django==5.2.3
 django-cors-headers==4.7.0
 djangorestframework==3.16.0
+graphql-core==3.2.8
+strawberry-graphql==0.312.0
+strawberry-graphql-django==0.82.0
 idna==3.10
 numpy==2.2.6
 pandas==2.3.0
@@ -21,3 +24,32 @@ typing_extensions==4.14.0
 tzdata==2025.2
 tzlocal==5.3.1
 urllib3==2.4.0
+
+# Data ingestion & file parsing
+openpyxl>=3.1.5
+sqlalchemy>=2.0.36
+pymongo>=4.6.0
+
+# Fast data processing (replaces pandas for ingestion)
+polars>=1.0.0
+pyarrow>=14.0.0
+connectorx>=0.3.3
+
+# In-process analytics engine (column profiling, correlations, outliers)
+duckdb>=1.0.0
+
+# ML / profiling
+scikit-learn>=1.4.0
+
+# Static files
+whitenoise>=6.6.0
+
+# Redis — async job queue (replaces Kafka) + result caching
+redis>=5.0.0
+
+# AI / LLM (OpenAI-compatible SDK — works with Ollama, vLLM, OpenAI)
+openai>=1.0.0
+
+# Keycloak / SSO Authentication
+PyJWT>=2.8.0
+cryptography>=42.0.0

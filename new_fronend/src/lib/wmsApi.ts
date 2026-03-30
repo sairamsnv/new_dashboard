@@ -11,18 +11,25 @@ import type {
 
 /**
  * Base URL for the Django WMS API (no trailing slash).
- * - If `VITE_WMS_API_BASE_URL` is set (build or .env), use it.
- * - Vite dev: defaults to http://127.0.0.1:8000 when unset.
- * - Production bundle served by Django: uses `window.location.origin` so /api/* hits the same host
- *   (no .env needed when you open the app at http://127.0.0.1:8000/).
+ *
+ * Strategy:
+ * - DEV (Vite dev server, inside Docker or locally):
+ *     Return '' so all /api/* and /auth/* requests use RELATIVE paths.
+ *     Vite's server-side proxy (vite.config.ts) intercepts them and
+ *     forwards to the backend via host.docker.internal — the browser
+ *     never needs to resolve that Docker-internal hostname directly.
+ *
+ * - PRODUCTION (bundle served by Django at e.g. http://localhost:8000):
+ *     Use window.location.origin so /api/* hits the same host automatically.
+ *     No .env config needed.
+ *
+ * NOTE: Never return `http://host.docker.internal:*` here — that hostname
+ * only resolves inside Docker containers, not in the user's browser.
  */
 export function getWmsApiBase(): string {
-  const raw = import.meta.env.VITE_WMS_API_BASE_URL;
-  if (raw != null && String(raw).trim() !== '') {
-    return String(raw).replace(/\/$/, '');
-  }
   if (import.meta.env.DEV) {
-    return 'http://127.0.0.1:8000';
+    // Vite proxy handles /api/* and /auth/* → use relative paths
+    return '';
   }
   if (typeof window !== 'undefined' && window.location?.origin && window.location.protocol !== 'file:') {
     return window.location.origin.replace(/\/$/, '');

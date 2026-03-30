@@ -18,6 +18,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 try:
     from dotenv import load_dotenv
 
+    # Project root .env (docker-compose env_file) then backend/.env
+    load_dotenv(BASE_DIR.parent / '.env')
     load_dotenv(BASE_DIR / '.env')
 except ImportError:
     pass
@@ -44,6 +46,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 # Application definition
@@ -52,6 +56,10 @@ INSTALLED_APPS = [
     'dr_dashboard',
     'dashboard',
     'dashboard_meta',
+    'data_ingestion',
+    'ai_engine',
+    'keycloak_auth',
+    'strawberry_django',
     'rest_framework',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -63,11 +71,12 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'keycloak_auth.middleware.KeycloakAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -77,7 +86,7 @@ ROOT_URLCONF = 'rare_wms.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -104,31 +113,49 @@ WSGI_APPLICATION = 'rare_wms.wsgi.application'
 import os
 import dj_database_url
 from urllib.parse import quote_plus
-username = "netscore"
-password = "NetScore@123"
 
-# encoded_username = quote_plus(username)
-# encoded_password = quote_plus(password)
-# WMS Database
-WMS_DATABASE_URL = os.getenv("WMS_DATABASE_URL", "postgresql://netscore_wms_rare:NetScore@123@192.168.1.26:5432/netscore_wms_rare")
 
-# DR Dashboard Database (using same database with different schema)
-DR_DATABASE_URL = os.getenv("DR_DATABASE_URL", "postgresql://netscore_wms_rare:NetScore@123@192.168.1.26:5432/netscore_wms_rare")
+def _postgres_url_from_components() -> str | None:
+    """
+    Build postgresql:// from POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST,
+    POSTGRES_PORT, POSTGRES_DB. Password is URL-encoded so @ and other chars work.
+    """
+    user = os.getenv("POSTGRES_USER")
+    if not user:
+        return None
+    password = os.getenv("POSTGRES_PASSWORD", "")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "postgres")
+    return (
+        f"postgresql://{quote_plus(user)}:{quote_plus(password)}"
+        f"@{host}:{port}/{db}"
+    )
+
+
+# Prefer WMS_DATABASE_URL / DR_DATABASE_URL; else POSTGRES_*; else local dev default
+WMS_DATABASE_URL = os.getenv("WMS_DATABASE_URL") or _postgres_url_from_components()
+if not WMS_DATABASE_URL:
+    WMS_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/analytics_dashboard"
+
+DR_DATABASE_URL = os.getenv("DR_DATABASE_URL") or WMS_DATABASE_URL
+
+# APScheduler: periodic WMS + DR fetch (see dashboard.background_thread).
+# Set ENABLE_BACKGROUND_SCHEDULER=1 in .env to enable (off by default for analytics stack).
+_bg_sched = os.getenv("ENABLE_BACKGROUND_SCHEDULER", "false").strip().lower()
+ENABLE_BACKGROUND_SCHEDULER = _bg_sched in ("1", "true", "yes", "on")
 
 DATABASES = {
-    'default': dj_database_url.config(default=WMS_DATABASE_URL),  # WMS database (public schema)
-    'dr_database': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'netscore_wms_rare',
-        'USER': 'netscore_wms_rare',
-        'PASSWORD': 'NetScore@123',
-        'HOST': '192.168.1.26',
-        'PORT': '5432',
-        'OPTIONS': {
-            'options': '-c search_path=rare_dr,public'
-        }
-    }
+    'default': dj_database_url.config(default=WMS_DATABASE_URL),
 }
+
+# DR dashboard models: same cluster as default, optional separate schema (see DR_DATABASE_SEARCH_PATH)
+_dr = dj_database_url.parse(DR_DATABASE_URL)
+_dr.setdefault('OPTIONS', {})
+# Use "public" for a fresh local DB; use "rare_dr,public" if that schema exists (legacy WMS)
+_dr_search = os.getenv("DR_DATABASE_SEARCH_PATH", "public")
+_dr['OPTIONS']['options'] = f'-c search_path={_dr_search}'
+DATABASES['dr_database'] = _dr
 
 # Database routing for apps (using schemas)
 DATABASE_ROUTERS = ['rare_wms.database_router.DatabaseRouter']
@@ -166,19 +193,27 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-
-import os
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# React build files (Vite output; copied to staticfiles via collectstatic)
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-    os.path.join(BASE_DIR, '..', 'new_fronend', 'dist'),
-]
+# Vite production output — only listed when the folder exists (avoids staticfiles.W004)
+_react_dist_default = os.path.join(BASE_DIR, '..', 'new_fronend', 'dist')
+# Docker: set REACT_BUILD_DIR=/app/frontend_dist when dist is bind-mounted (see docker-compose)
+REACT_BUILD_DIR = os.getenv('REACT_BUILD_DIR') or _react_dist_default
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+if os.path.isdir(REACT_BUILD_DIR):
+    STATICFILES_DIRS.append(REACT_BUILD_DIR)
 
-# Served by FrontendAppView when index.html is not yet in STATIC_ROOT
-REACT_BUILD_DIR = os.path.join(BASE_DIR, '..', 'new_fronend', 'dist')
+# Shown when dist/ is missing: local dev usually uses Vite on this URL instead of :8000
+FRONTEND_DEV_URL = os.environ.get('FRONTEND_DEV_URL', 'http://localhost:5173')
+
+# When no SPA files exist, GET / redirects to Vite (set false to see the HTML explainer page)
+FRONTEND_ROOT_REDIRECT = os.getenv('FRONTEND_ROOT_REDIRECT', 'true').strip().lower() in (
+    '1',
+    'true',
+    'yes',
+    'on',
+)
 
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -211,6 +246,32 @@ USE_TZ = True
 if 'rare.netscoretech.com' in ALLOWED_HOSTS:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# Media files (uploaded datasets)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Directory where uploaded CSV/Excel files are stored before loading into PG
+FILE_UPLOAD_DIR = os.getenv('FILE_UPLOAD_DIR', os.path.join(BASE_DIR, 'media', 'uploads'))
+
+# Redis — async job queue (replaces Kafka) + result caching
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# Topic names (kept the same — now Redis Stream keys)
+REDIS_TOPICS = {
+    'FILE_UPLOADED': 'file-uploaded',
+    'DB_CONNECTED': 'db-connected',
+    'AI_INSIGHTS': 'ai-insights',
+    'AI_WIDGET_BUILD': 'ai-widget-build',
+    'AI_NL_QUERY': 'ai-nl-query',
+    'AI_GRAPH_SUGGESTIONS': 'ai-graph-suggestions',
+}
+
+# Ollama / LLM configuration (OpenAI-compatible)
+LLM_BASE_URL = os.getenv('LLM_BASE_URL', 'http://localhost:11434/v1')
+LLM_API_KEY = os.getenv('LLM_API_KEY', 'ollama')
+LLM_MODEL = os.getenv('LLM_MODEL', 'qwen2.5-coder:7b')
+LLM_SUMMARY_MODEL = os.getenv('LLM_SUMMARY_MODEL', 'llama3.2:3b')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -222,3 +283,25 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
+# ---------------------------------------------------------------------------
+# Keycloak / SSO Configuration
+# Values can be overridden via environment variables (see .env.example).
+# ---------------------------------------------------------------------------
+_kc_server = os.getenv("KEYCLOAK_SERVER_URL", "http://localhost:8080")
+_kc_realm  = os.getenv("KEYCLOAK_REALM", "master")
+KEYCLOAK = {
+    "SERVER_URL":       _kc_server,
+    "REALM":            _kc_realm,
+    "CLIENT_ID":        os.getenv("KEYCLOAK_CLIENT_ID", "analytics-dashboard"),
+    "CLIENT_SECRET":    os.getenv("KEYCLOAK_CLIENT_SECRET", ""),
+    "ADMIN_USERNAME":   os.getenv("KEYCLOAK_ADMIN_USERNAME", "admin"),
+    "ADMIN_PASSWORD":   os.getenv("KEYCLOAK_ADMIN_PASSWORD", "admin"),
+    "DISCOVERY_URL":    os.getenv(
+        "KEYCLOAK_DISCOVERY_URL",
+        f"{_kc_server}/realms/{_kc_realm}/.well-known/openid-configuration",
+    ),
+}
+
+# Set to "true" to require valid tokens on all /api/* endpoints
+KEYCLOAK_ENFORCE_API_AUTH = os.getenv("KEYCLOAK_ENFORCE_API_AUTH", "false")

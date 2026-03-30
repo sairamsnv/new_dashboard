@@ -8,82 +8,62 @@
   :root {
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
-
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-
+    --primary: 244 75% 67%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
-
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-
-    --accent: 262 83% 58%;
-    --accent-foreground: 210 40% 98%;
-
+    --accent: 244 75% 67%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
-
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-
+    --ring: 244 75% 67%;
     --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5% 26%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 5% 96%;
-    --sidebar-accent-foreground: 240 6% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 221 83% 53%;
-
-    --chart-1: 221 83% 53%;
-    --chart-2: 262 83% 58%;
+    --chart-1: 244 75% 67%;
+    --chart-2: 173 70% 41%;
     --chart-3: 142 71% 45%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
-
-    --widget-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.06), 0 1px 2px -1px hsl(0 0% 0% / 0.06);
-    --widget-shadow-hover: 0 10px 15px -3px hsl(0 0% 0% / 0.08), 0 4px 6px -4px hsl(0 0% 0% / 0.04);
   }
 
   .dark {
-    --background: 224 30% 8%;
-    --foreground: 210 40% 96%;
+    /* Page background: #0f1117 */
+    --background: 225 21% 7%;
+    --foreground: 220 15% 91%;
 
-    --card: 224 25% 12%;
-    --card-foreground: 210 40% 96%;
+    /* Card background: #161b27 */
+    --card: 222 28% 12%;
+    --card-foreground: 220 15% 91%;
 
-    --popover: 224 25% 12%;
-    --popover-foreground: 210 40% 96%;
+    --popover: 222 28% 12%;
+    --popover-foreground: 220 15% 91%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
+    /* Brand purple: #6C63FF */
+    --primary: 244 100% 70%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 224 20% 18%;
-    --secondary-foreground: 210 40% 96%;
+    --secondary: 222 22% 17%;
+    --secondary-foreground: 220 15% 91%;
 
-    --muted: 224 20% 18%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 222 22% 16%;
+    --muted-foreground: 220 10% 50%;
 
-    --accent: 262 83% 58%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 244 100% 70%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 63% 31%;
+    --destructive: 0 60% 40%;
     --destructive-foreground: 210 40% 98%;
 
     --success: 142 71% 45%;
@@ -92,27 +72,19 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 224 15% 20%;
-    --input: 224 15% 20%;
-    --ring: 221 83% 53%;
+    --border: 222 20% 18%;
+    --input: 222 20% 18%;
+    --ring: 244 100% 70%;
 
-    --sidebar-background: 224 30% 6%;
-    --sidebar-foreground: 240 5% 96%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 224 20% 14%;
-    --sidebar-accent-foreground: 240 5% 96%;
-    --sidebar-border: 224 15% 16%;
-    --sidebar-ring: 221 83% 53%;
-
-    --chart-1: 221 83% 60%;
-    --chart-2: 262 83% 65%;
+    /* Chart palette: Purple + Teal + Emerald + Amber + Red */
+    --chart-1: 244 100% 70%;
+    --chart-2: 173 70% 41%;
     --chart-3: 142 71% 55%;
     --chart-4: 38 92% 55%;
     --chart-5: 0 84% 65%;
 
-    --widget-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.2), 0 1px 2px -1px hsl(0 0% 0% / 0.2);
-    --widget-shadow-hover: 0 10px 15px -3px hsl(0 0% 0% / 0.3), 0 4px 6px -4px hsl(0 0% 0% / 0.2);
+    --widget-shadow: 0 2px 8px 0 hsl(0 0% 0% / 0.25), 0 1px 2px -1px hsl(0 0% 0% / 0.3);
+    --widget-shadow-hover: 0 12px 32px -4px hsl(0 0% 0% / 0.4), 0 4px 8px -4px hsl(0 0% 0% / 0.3);
   }
 }
 
@@ -127,7 +99,48 @@
   }
 }
 
-/* React Grid Layout styles */
+/* ── Glass morphism utilities ─────────────────────────────────────────────── */
+@layer components {
+  .glass {
+    background: hsl(var(--card) / 0.55);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border-color: hsl(var(--border) / 0.7);
+  }
+
+  .glass-strong {
+    background: hsl(var(--card) / 0.75);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border-color: hsl(var(--border) / 0.6);
+  }
+
+  /* Apple-quality card hover: subtle lift + shadow bloom */
+  .hover-lift {
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.22s ease,
+                border-color 0.22s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px) scale(1.005);
+    box-shadow: 0 16px 32px -8px hsl(0 0% 0% / 0.4),
+                0 0 0 1px hsl(var(--primary) / 0.12);
+  }
+
+  .hover-lift:active {
+    transform: translateY(0) scale(0.995);
+    transition-duration: 0.08s;
+  }
+
+  /* Glow ring on focus/hover for interactive cards */
+  .glow-ring:hover {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25),
+                0 8px 24px hsl(var(--primary) / 0.08);
+  }
+}
+
+/* ── React Grid Layout ───────────────────────────────────────────────────── */
 .react-grid-layout {
   position: relative;
   transition: height 200ms ease;
@@ -152,67 +165,131 @@
   transition: none;
   z-index: 3;
   will-change: transform;
-  opacity: 0.85;
-  box-shadow: 0 25px 50px -12px hsl(0 0% 0% / 0.25);
+  opacity: 0.88;
+  box-shadow: 0 28px 60px -12px hsl(0 0% 0% / 0.5),
+              0 0 0 1px hsl(var(--primary) / 0.2);
 }
 
-/* Load order: react-grid-layout/css first (main.tsx), then this file — we override opacity/size. */
 .react-grid-item > .react-resizable-handle {
   position: absolute;
-  width: 28px;
-  height: 28px;
-  z-index: 2;
-  opacity: 0.5;
+  width: 20px;
+  height: 20px;
 }
 
-.react-grid-item:hover > .react-resizable-handle {
-  opacity: 1;
-}
-
-/* Corner grip only — do not style ::after on e/w/s or their library positioning breaks */
-.react-grid-item > .react-resizable-handle.react-resizable-handle-se::after {
+.react-grid-item > .react-resizable-handle::after {
   content: "";
   position: absolute;
   right: 4px;
   bottom: 4px;
-  width: 10px;
-  height: 10px;
-  border-right: 2px solid hsl(var(--muted-foreground) / 0.55);
-  border-bottom: 2px solid hsl(var(--muted-foreground) / 0.55);
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid hsl(var(--muted-foreground) / 0.35);
+  border-bottom: 2px solid hsl(var(--muted-foreground) / 0.35);
   border-radius: 0 0 2px 0;
   transition: border-color 150ms ease;
 }
 
-.react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se::after {
-  border-color: hsl(var(--primary) / 0.75);
+.react-grid-item:hover > .react-resizable-handle::after {
+  border-color: hsl(var(--primary) / 0.6);
 }
 
-.react-grid-item > .react-resizable-handle.react-resizable-handle-se {
-  bottom: 0;
-  right: 0;
-  cursor: se-resize;
+.react-grid-item > .react-resizable-handle-se { bottom: 0; right: 0; cursor: se-resize; }
+
+.react-grid-item > .react-resizable-handle-e {
+  right: -4px; top: 50%; transform: translateY(-50%);
+  cursor: e-resize; width: 12px; height: 40px;
 }
+.react-grid-item > .react-resizable-handle-e::after {
+  right: 2px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; border: none;
+  background: hsl(var(--muted-foreground) / 0.25); border-radius: 2px;
+}
+.react-grid-item:hover > .react-resizable-handle-e::after {
+  background: hsl(var(--primary) / 0.5);
+}
+
+.react-grid-item > .react-resizable-handle-s {
+  bottom: -4px; left: 50%; transform: translateX(-50%);
+  cursor: s-resize; width: 40px; height: 12px;
+}
+.react-grid-item > .react-resizable-handle-s::after {
+  bottom: 2px; left: 50%; transform: translateX(-50%);
+  width: 20px; height: 3px; border: none;
+  background: hsl(var(--muted-foreground) / 0.25); border-radius: 2px;
+}
+.react-grid-item:hover > .react-resizable-handle-s::after {
+  background: hsl(var(--primary) / 0.5);
+}
+
+.react-grid-item > .react-resizable-handle-w {
+  left: -4px; top: 50%; transform: translateY(-50%);
+  cursor: w-resize; width: 12px; height: 40px;
+}
+.react-grid-item > .react-resizable-handle-w::after {
+  left: 2px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; border: none;
+  background: hsl(var(--muted-foreground) / 0.25); border-radius: 2px;
+}
+.react-grid-item:hover > .react-resizable-handle-w::after {
+  background: hsl(var(--primary) / 0.5);
+}
+
+.react-grid-item > .react-resizable-handle-n {
+  top: -4px; left: 50%; transform: translateX(-50%);
+  cursor: n-resize; width: 40px; height: 12px;
+}
+.react-grid-item > .react-resizable-handle-n::after {
+  top: 2px; left: 50%; transform: translateX(-50%);
+  width: 20px; height: 3px; border: none;
+  background: hsl(var(--muted-foreground) / 0.25); border-radius: 2px;
+}
+.react-grid-item:hover > .react-resizable-handle-n::after {
+  background: hsl(var(--primary) / 0.5);
+}
+
+.react-grid-item > .react-resizable-handle-sw { bottom: 0; left: 0; cursor: sw-resize; }
+.react-grid-item > .react-resizable-handle-nw { top: 0; left: 0; cursor: nw-resize; }
+.react-grid-item > .react-resizable-handle-ne { top: 0; right: 0; cursor: ne-resize; }
 
 .react-grid-placeholder {
-  background: hsl(var(--primary) / 0.15);
-  border: 2px dashed hsl(var(--primary) / 0.4);
+  background: hsl(var(--primary) / 0.1);
+  border: 2px dashed hsl(var(--primary) / 0.35);
   border-radius: var(--radius);
   opacity: 1;
   transition: all 150ms ease;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* ── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.2);
-  border-radius: 3px;
+  background: hsl(var(--muted-foreground) / 0.18);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.4);
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+
+/* ── AI shimmer loader ──────────────────────────────────────────────────── */
+@keyframes ai-loader-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.ai-loader-shimmer-bar {
+  animation: ai-loader-shimmer 1.8s ease-in-out infinite;
+}
+
+/* ── Glow pulse for brand elements ──────────────────────────────────────── */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px hsl(var(--primary) / 0.3); }
+  50%       { box-shadow: 0 0 20px hsl(var(--primary) / 0.5); }
+}
+
+/* ── Drop zone pulse border ─────────────────────────────────────────────── */
+@keyframes border-pulse {
+  0%, 100% { border-color: hsl(244 100% 70% / 0.4); }
+  50%       { border-color: hsl(244 100% 70% / 0.8); }
+}
+.drop-zone-active {
+  animation: border-pulse 1.5s ease-in-out infinite;
 }

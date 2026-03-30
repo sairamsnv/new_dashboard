@@ -1,0 +1,218 @@
+services:
+
+  # ─── Keycloak (SSO / Auth server) ────────────────────────────────────────
+  # Access Keycloak admin console at http://localhost:8080
+  # Default admin: admin / admin  (override with KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD)
+  keycloak-db:
+    image: postgres:15-alpine
+    container_name: analytics_keycloak_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${KEYCLOAK_DB:-keycloak}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:-keycloak}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak_password}
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks:
+      - analytics_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER:-keycloak}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.5
+    container_name: analytics_keycloak
+    command: start-dev
+    restart: unless-stopped
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak_password}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - analytics_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ─── Redis (async job queue + result cache) ───────────────────────────────
+  # Replaces: Kafka + Zookeeper + Kafka UI (3 containers → 1, ~1.5GB RAM saved)
+  redis:
+    image: redis:7-alpine
+    container_name: analytics_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - analytics_network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─── Ollama (local LLM — no API key needed) ───────────────────────────────
+  # NOTE: Runs natively on Mac for Apple Silicon Metal GPU acceleration.
+  #       Start with: OLLAMA_HOST=0.0.0.0 ollama serve
+  #       Then pull:  ollama pull llama3.2:3b
+  # Uncomment below ONLY if you want Ollama inside Docker (CPU-only, much slower):
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: analytics_ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+
+  # ─── Django Backend ───────────────────────────────────────────────────────
+  # Build once; workers reuse the same image via 'image: analytics-backend'
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: analytics-backend
+    container_name: analytics_backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      # Remove keycloak dependency if running Keycloak natively (not via Docker).
+      # Uncomment if you start Keycloak via docker-compose:
+      # keycloak:
+      #   condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      LLM_BASE_URL: http://host.docker.internal:11434/v1
+      LLM_API_KEY: ollama
+      LLM_MODEL: llama3.2:3b
+      LLM_SUMMARY_MODEL: llama3.2:3b
+      FILE_UPLOAD_DIR: /app/media/uploads
+      ENABLE_BACKGROUND_SCHEDULER: "false"
+      DJANGO_SETTINGS_MODULE: rare_wms.settings
+      POSTGRES_HOST: host.docker.internal
+      REACT_BUILD_DIR: /app/frontend_dist
+      # Keycloak — use host.docker.internal so container reaches native Mac Keycloak
+      # Switch to http://keycloak:8080 if you run Keycloak via docker-compose
+      KEYCLOAK_SERVER_URL: http://host.docker.internal:8080
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+      - ./new_fronend/dist:/app/frontend_dist:ro
+    networks:
+      - analytics_network
+    entrypoint: ["/app/docker-entrypoint.sh"]
+    command: python manage.py runserver 0.0.0.0:8000
+
+  # ─── Kafka Worker: File Ingestion ─────────────────────────────────────────
+  worker-ingest:
+    image: analytics-backend
+    container_name: analytics_worker_ingest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      FILE_UPLOAD_DIR: /app/media/uploads
+      DJANGO_SETTINGS_MODULE: rare_wms.settings
+      ENABLE_BACKGROUND_SCHEDULER: "false"
+      POSTGRES_HOST: host.docker.internal
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+    networks:
+      - analytics_network
+    entrypoint: ["/app/docker-entrypoint.sh"]
+    command: python manage.py run_kafka_worker --worker ingest
+
+  # ─── Kafka Worker: AI Tasks ───────────────────────────────────────────────
+  worker-ai:
+    image: analytics-backend
+    container_name: analytics_worker_ai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      LLM_BASE_URL: http://host.docker.internal:11434/v1
+      LLM_API_KEY: ollama
+      LLM_MODEL: llama3.2:3b
+      LLM_SUMMARY_MODEL: llama3.2:3b
+      DJANGO_SETTINGS_MODULE: rare_wms.settings
+      ENABLE_BACKGROUND_SCHEDULER: "false"
+      POSTGRES_HOST: host.docker.internal
+    volumes:
+      - ./backend:/app
+    networks:
+      - analytics_network
+    entrypoint: ["/app/docker-entrypoint.sh"]
+    command: python manage.py run_kafka_worker --worker ai
+
+  # ─── React Frontend (dev server) ──────────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: analytics_frontend
+    restart: unless-stopped
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./new_fronend:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      # host.docker.internal resolves to the Mac host — where analytics_backend exposes :8000
+      VITE_WMS_API_BASE_URL: http://host.docker.internal:8000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+
+volumes:
+  redis_data:
+  media_data:
+  node_modules:
+  keycloak_data:
+  keycloak_db_data:
+
+networks:
+  analytics_network:
+    driver: bridge

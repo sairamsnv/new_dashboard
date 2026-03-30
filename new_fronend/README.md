@@ -1,80 +1,57 @@
-# Welcome to your Lovable project
+# Analytics Dashboard
 
-## WMS backend (Django)
+An AI-powered analytics dashboard built with React, Vite, and Tailwind CSS.
 
-1. Copy `.env.example` to `.env` and set `VITE_WMS_API_BASE_URL` to your Django server origin (no trailing slash), e.g. `http://127.0.0.1:8000`.
-2. Restart `npm run dev` after changing `.env`.
-3. Default dashboard widgets use `dataSource` values such as `wms-kpi`, `wms-warehouse-ops-bar`, `wms-so-po-lines`, `wms-employee-pie`, `wms-orders-table`, `wms-insights-table`. Widgets without those keys keep using static mock data.
-4. If you still see old demo widgets, use **Reset dashboard** in the UI (layout is persisted in localStorage).
+## Tech Stack
 
-## Project info
+- **React 18** with TypeScript
+- **Vite** — fast build tool with HMR
+- **Tailwind CSS** + **shadcn/ui** — component library
+- **Recharts** — data visualisations
+- **Zustand** — global state management
+- **React Query** — server state / data fetching
+- **React Router v6** — client-side routing
+- **Keycloak** — authentication & session management
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Getting Started
 
-## How can I edit this code?
+### Development
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+cd new_fronend
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app runs at `http://localhost:5173`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Production Build
 
-**Use GitHub Codespaces**
+```bash
+npm run build
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Built output is in `dist/`.
 
-## What technologies are used for this project?
+### Environment Variables
 
-This project is built with:
+Create a `.env` file (see `.env.example` in the repo root):
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
+VITE_WMS_API_BASE_URL=http://localhost:8000
+```
 
-## How can I deploy this project?
+## Backend
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+The Django backend lives in the `backend/` directory. Start it with:
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+cd backend
+python manage.py runserver
+```
 
-Yes, you can!
+Or run the full stack with Docker Compose:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```bash
+docker compose up -d
+```

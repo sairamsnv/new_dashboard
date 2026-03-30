@@ -1,9 +1,6 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { trafficSourceData } from '@/data/mockData';
 import type { WidgetConfig } from '@/types/dashboard';
-import { useEmployeePerformance } from '@/hooks/useWmsData';
-import { getWmsApiBase } from '@/lib/wmsApi';
-import WmsConfigHint from './WmsConfigHint';
+import { useSchemaChartData } from '@/hooks/useSchemaChartData';
 
 interface PieChartWidgetProps {
   widget: WidgetConfig;
@@ -17,93 +14,76 @@ const COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-const PieChartWidget = ({ widget }: PieChartWidgetProps) => {
-  const isWms = widget.dataSource === 'wms-employee-pie';
-  const timeframe = (widget.config?.timeframe as string) ?? 'today';
-  const showLegend = (widget.config?.showLegend as boolean | undefined) ?? true;
-  const { data, isPending, error } = useEmployeePerformance(timeframe, { enabled: isWms });
+const tooltipStyle = {
+  backgroundColor: 'hsl(var(--card))',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: 'var(--radius)',
+  fontSize: 12,
+  color: 'hsl(var(--foreground))',
+};
 
-  if (isWms) {
-    if (!getWmsApiBase()) return <WmsConfigHint />;
-    if (isPending) {
-      return <div className="h-full animate-pulse rounded-md bg-muted" />;
-    }
-    if (error) {
-      return <div className="p-2 text-xs text-destructive">{error instanceof Error ? error.message : 'Error'}</div>;
-    }
-    const pieData = data?.pie_data ?? [];
+const PieChartWidget = ({ widget }: PieChartWidgetProps) => {
+  const datasetSlug = widget.config?.datasetSlug as string | undefined;
+  const xCol = widget.config?.xCol as string | undefined;   // name/category column
+  const rawYCols = widget.config?.yCols;
+  const yCols: string[] = Array.isArray(rawYCols) ? rawYCols : rawYCols ? [String(rawYCols)] : [];
+  const valueCol = yCols[0];
+  const showLegend = (widget.config?.showLegend as boolean | undefined) ?? true;
+
+  const allCols = [xCol, valueCol].filter(Boolean) as string[];
+  const { data, isPending, error } = useSchemaChartData(datasetSlug, allCols, 50);
+
+  if (!datasetSlug || !xCol || !valueCol) {
     return (
-      <div className="h-full w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={pieData}
-              cx="50%"
-              cy="45%"
-              innerRadius="40%"
-              outerRadius="70%"
-              paddingAngle={3}
-              dataKey="value"
-              nameKey="name"
-            >
-              {pieData.map((entry, index) => (
-                <Cell key={`cell-${entry.name}-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: 'var(--radius)',
-                fontSize: 12,
-                color: 'hsl(var(--foreground))',
-              }}
-              formatter={(value: number) => [`${value}%`, 'Share']}
-            />
-            {showLegend ? (
-              <Legend
-                wrapperStyle={{ fontSize: 11 }}
-                formatter={(value) => <span style={{ color: 'hsl(var(--foreground))' }}>{value}</span>}
-              />
-            ) : null}
-          </PieChart>
-        </ResponsiveContainer>
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+        Configure dataset, label and value columns in the widget panel.
       </div>
     );
   }
+
+  if (isPending) return <div className="h-full animate-pulse rounded-md bg-muted" />;
+
+  if (error) {
+    return (
+      <div className="p-2 text-xs text-destructive">
+        {error instanceof Error ? error.message : 'Error loading data'}
+      </div>
+    );
+  }
+
+  const pieData = (data ?? []).map(row => ({
+    name: String(row[xCol] ?? ''),
+    value: Number(row[valueCol] ?? 0),
+  }));
 
   return (
     <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            data={trafficSourceData}
+            data={pieData}
             cx="50%"
             cy="45%"
-            innerRadius="40%"
-            outerRadius="70%"
+            innerRadius="35%"
+            outerRadius="65%"
             paddingAngle={3}
             dataKey="value"
+            nameKey="name"
           >
-            {trafficSourceData.map((_, index) => (
+            {pieData.map((_, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
           <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: 'var(--radius)',
-              fontSize: 12,
-              color: 'hsl(var(--foreground))',
-            }}
+            contentStyle={tooltipStyle}
+            formatter={(value: number, name: string) => [value, name]}
           />
-          {showLegend ? (
+          {showLegend && (
             <Legend
               wrapperStyle={{ fontSize: 11 }}
               formatter={(value) => <span style={{ color: 'hsl(var(--foreground))' }}>{value}</span>}
             />
-          ) : null}
+          )}
         </PieChart>
       </ResponsiveContainer>
     </div>

@@ -35,9 +35,9 @@ urlpatterns = [
     re_path(r'^placeholder\.svg$', serve_react_file, kwargs={'name': 'placeholder.svg'}),
 
     # Only catch non-API and non-auth routes for React fallback
-    # Exclude: /api/*, /auth/*, /admin/*, /assets/*
+    # Exclude: /api/*, /auth/*, /admin/*, /assets/*, /graphql/* (Strawberry)
     re_path(
-        r'^(?!api/)(?!auth/)(?!admin/)(?!assets/).*$',
+        r'^(?!api/)(?!auth/)(?!admin/)(?!assets/)(?!graphql/).*$',
         FrontendAppView.as_view(),
         name='frontend',
     ),

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, RefreshCw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,7 +28,8 @@ import {
   type WidgetType,
 } from '@/types/dashboard';
 import SchemaKpiInspector from '@/components/dashboard/SchemaKpiInspector';
-import type { WmsOrdersFilterType, WmsSoPoFilterType } from '@/types/wms';
+import { fetchSchemaInspect } from '@/lib/schemaApi';
+import type { SchemaInspectColumn } from '@/lib/schemaApi';
 
 const TIMEFRAME_OPTIONS = ['today', 'yesterday', 'this week', 'this month'] as const;
 
@@ -36,19 +38,87 @@ const INSIGHTS_PERIOD_OPTIONS = ['this week', 'this month', 'last month', 'this 
 const datasetSelectValue = (dataSource: string | undefined) =>
   dataSource && dataSource !== '' ? dataSource : SAMPLE_DATASET_VALUE;
 
+// Multi-select toggle for Y columns (used below)
+const YColumnSelector = ({
+  columns,
+  selected,
+  onChange,
+}: {
+  columns: SchemaInspectColumn[];
+  selected: string[];
+  onChange: (cols: string[]) => void;
+}) => (
+  <div className="flex flex-wrap gap-1.5">
+    {columns.map((col) => {
+      const active = selected.includes(col.col_name);
+      return (
+        <button
+          key={col.col_name}
+          type="button"
+          onClick={() =>
+            onChange(
+              active
+                ? selected.filter((c) => c !== col.col_name)
+                : [...selected, col.col_name],
+            )
+          }
+          className={`rounded px-2 py-0.5 text-[10px] font-mono border transition-colors ${
+            active
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-muted text-muted-foreground border-border hover:border-primary/50'
+          }`}
+        >
+          {col.col_name}
+        </button>
+      );
+    })}
+  </div>
+);
+
 const WidgetInspector = () => {
-  const {
-    widgets,
-    layouts,
-    selectedWidgetId,
-    selectWidget,
-    updateWidget,
-    updateWidgetLayout,
-    removeWidget,
-    setWidgetType,
-  } = useDashboardStore();
+  const { widgets, selectedWidgetId, activeDatasetSlug, selectWidget, updateWidget, removeWidget, setWidgetType } =
+    useDashboardStore();
   const widget = widgets.find((w) => w.id === selectedWidgetId);
   const [descOpen, setDescOpen] = useState(false);
+
+  // Derive the datasetSlug in use for this widget (fall back to the active dataset)
+  const widgetDatasetSlug = (widget?.config?.datasetSlug as string | undefined) || activeDatasetSlug || '';
+
+  // Fetch schema columns when we have a dataset slug
+  const { data: schemaData, isFetching: schemaLoading, refetch: refetchSchema } = useQuery({
+    queryKey: ['schema-inspect', widgetDatasetSlug],
+    queryFn: () => fetchSchemaInspect(widgetDatasetSlug),
+    enabled: Boolean(widgetDatasetSlug),
+    staleTime: 5 * 60 * 1000,
+  });
+  const schemaCols: SchemaInspectColumn[] = schemaData?.columns ?? [];
+
+  // Auto-suggest best columns once schema loads, if widget has no columns configured
+  useEffect(() => {
+    if (!widget || !schemaCols.length) return;
+    const cfg = widget.config ?? {};
+    const hasX = Boolean(cfg.xCol as string);
+    const hasY = ((cfg.yCols as string[]) || []).length > 0;
+    const hasCols = ((cfg.columns as string[]) || []).length > 0;
+    if (hasX && (hasY || hasCols)) return; // already configured — don't overwrite
+
+    const textCols = schemaCols.filter(c => c.dtype === 'text' || c.dtype === 'categorical' || c.is_dimension);
+    const numCols  = schemaCols.filter(c => c.dtype === 'numeric' || c.dtype === 'integer' || c.dtype === 'float');
+
+    if (widget.type === 'pie-chart') {
+      const labelCol = textCols[0]?.col_name ?? schemaCols[0]?.col_name;
+      const valCol   = numCols[0]?.col_name  ?? schemaCols[1]?.col_name;
+      updateWidget(widget.id, { config: { ...cfg, xCol: labelCol ?? '', yCols: valCol ? [valCol] : [] } });
+    } else if (widget.type === 'bar-chart' || widget.type === 'line-chart') {
+      const xCol = textCols[0]?.col_name ?? schemaCols[0]?.col_name;
+      const yCol = numCols[0]?.col_name  ?? schemaCols[1]?.col_name;
+      updateWidget(widget.id, { config: { ...cfg, xCol: xCol ?? '', yCols: yCol ? [yCol] : [] } });
+    } else if (widget.type === 'table') {
+      const cols = schemaCols.slice(0, 6).map(c => c.col_name);
+      updateWidget(widget.id, { config: { ...cfg, columns: cols } });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schemaCols.length, widget?.id, widget?.type]);
 
   if (!widget) {
     return (
@@ -63,16 +133,6 @@ const WidgetInspector = () => {
   }
 
   const typeLabel = WIDGET_TYPES.find((t) => t.type === widget.type)?.label ?? widget.type;
-  const typeInfo = WIDGET_TYPES.find((t) => t.type === widget.type);
-  const layoutEntry = layouts.find((l) => l.i === widget.id);
-  const minW = layoutEntry?.minW ?? typeInfo?.minW ?? 1;
-  const minH = layoutEntry?.minH ?? typeInfo?.minH ?? 1;
-  const safeDim = (n: unknown, fallback: number) => {
-    const v = Number(n);
-    return Number.isFinite(v) ? Math.round(v) : fallback;
-  };
-  const gridW = safeDim(layoutEntry?.w, typeInfo?.defaultW ?? 6);
-  const gridH = safeDim(layoutEntry?.h, typeInfo?.defaultH ?? 4);
   const datasetOptions = datasetsForWidgetType(widget.type);
   const dsValue = datasetSelectValue(widget.dataSource);
   const description = typeof widget.config?.description === 'string' ? widget.config.description : '';
@@ -114,52 +174,6 @@ const WidgetInspector = () => {
             onChange={(e) => updateWidget(widget.id, { title: e.target.value })}
             className="h-8 text-sm"
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs">Size on dashboard</Label>
-          <p className="text-[10px] text-muted-foreground leading-snug">
-            Wider = more columns; taller = more rows. Drag the right or left edge to change width, the
-            bottom edge for height, or the bottom-right corner for both.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label htmlFor="widget-grid-w" className="text-[10px] text-muted-foreground">
-                Width (columns)
-              </Label>
-              <Input
-                id="widget-grid-w"
-                type="number"
-                min={minW}
-                max={12}
-                value={gridW}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (Number.isNaN(v)) return;
-                  updateWidgetLayout(widget.id, { w: v });
-                }}
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="widget-grid-h" className="text-[10px] text-muted-foreground">
-                Height (rows)
-              </Label>
-              <Input
-                id="widget-grid-h"
-                type="number"
-                min={minH}
-                max={48}
-                value={gridH}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (Number.isNaN(v)) return;
-                  updateWidgetLayout(widget.id, { h: v });
-                }}
-                className="h-8 text-sm"
-              />
-            </div>
-          </div>
         </div>
 
         <Collapsible
@@ -281,104 +295,121 @@ const WidgetInspector = () => {
           </>
         )}
 
-        {widget.type === 'bar-chart' && (
-          <>
-            <Separator />
-            <div className="space-y-2">
-              <Label className="text-xs">Year (WMS warehouse trend)</Label>
-              <Input
-                value={String((widget.config?.year as string) ?? new Date().getFullYear())}
-                onChange={(e) => patchConfig({ year: e.target.value })}
-                className="h-8 text-sm font-mono"
-              />
-            </div>
-          </>
-        )}
-
-        {widget.type === 'line-chart' && (
-          <>
-            <Separator />
-            <div className="space-y-2">
-              <Label className="text-xs">Series · sales vs purchase</Label>
-              <Select
-                value={((widget.config?.soPoType as WmsSoPoFilterType) ?? 'all') as string}
-                onValueChange={(v) => patchConfig({ soPoType: v as WmsSoPoFilterType })}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Both (SO + PO)</SelectItem>
-                  <SelectItem value="so">Sales orders only</SelectItem>
-                  <SelectItem value="po">Purchase orders only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
-
-        {widget.type === 'pie-chart' && (
-          <>
-            <Separator />
-            <div className="space-y-2">
-              <Label className="text-xs">Timeframe</Label>
-              <Select
-                value={(widget.config?.timeframe as string) ?? 'today'}
-                onValueChange={(v) => patchConfig({ timeframe: v })}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIMEFRAME_OPTIONS.map((tf) => (
-                    <SelectItem key={tf} value={tf} className="text-sm capitalize">
-                      {tf}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
-
-        {widget.type === 'table' && (
+        {(widget.type === 'bar-chart' || widget.type === 'line-chart' || widget.type === 'pie-chart' || widget.type === 'table') && (
           <>
             <Separator />
             <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-xs">Order list</Label>
-                <Select
-                  value={((widget.config?.orderType as WmsOrdersFilterType) ?? 'picked') as string}
-                  onValueChange={(v) => patchConfig({ orderType: v as WmsOrdersFilterType })}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="picked">Picked</SelectItem>
-                    <SelectItem value="packed">Packed</SelectItem>
-                    <SelectItem value="received">Received</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-medium text-foreground uppercase tracking-wide">Dataset columns</p>
+                {widgetDatasetSlug && (
+                  <button
+                    type="button"
+                    onClick={() => refetchSchema()}
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                    title="Refresh columns"
+                  >
+                    <RefreshCw className={`h-3 w-3 text-muted-foreground ${schemaLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Timeframe</Label>
-                <Select
-                  value={(widget.config?.timeframe as string) ?? 'today'}
-                  onValueChange={(v) => patchConfig({ timeframe: v })}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMEFRAME_OPTIONS.map((tf) => (
-                      <SelectItem key={tf} value={tf} className="text-sm capitalize">
-                        {tf}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              {/* Dataset slug — editable but auto-filled from active dataset */}
+              <div className="space-y-1">
+                <Label className="text-xs">Dataset</Label>
+                <Input
+                  placeholder="e.g. upload-ds-abc123"
+                  value={(widget.config?.datasetSlug as string) || activeDatasetSlug || ''}
+                  onChange={(e) => patchConfig({ datasetSlug: e.target.value })}
+                  className="h-8 text-[11px] font-mono"
+                />
+                {schemaCols.length > 0 && (
+                  <p className="text-[10px] text-emerald-500">{schemaCols.length} columns loaded</p>
+                )}
               </div>
+
+              {/* X column */}
+              {widget.type !== 'table' && (
+                <div className="space-y-1">
+                  <Label className="text-xs">X column (axis / label)</Label>
+                  {schemaCols.length > 0 ? (
+                    <Select
+                      value={(widget.config?.xCol as string) || ''}
+                      onValueChange={(v) => patchConfig({ xCol: v })}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Pick column…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schemaCols.map((col) => (
+                          <SelectItem key={col.col_name} value={col.col_name} className="text-sm font-mono">
+                            <span>{col.col_name}</span>
+                            <span className="ml-2 text-[10px] text-muted-foreground">{col.dtype}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder="e.g. date, category"
+                      value={(widget.config?.xCol as string) || ''}
+                      onChange={(e) => patchConfig({ xCol: e.target.value })}
+                      className="h-8 text-sm font-mono"
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Y columns / value columns */}
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  {widget.type === 'pie-chart'
+                    ? 'Value column'
+                    : widget.type === 'table'
+                    ? 'Columns to show'
+                    : 'Y columns (select one or more)'}
+                </Label>
+                {schemaCols.length > 0 ? (
+                  <YColumnSelector
+                    columns={schemaCols}
+                    selected={
+                      widget.type === 'table'
+                        ? ((widget.config?.columns as string[]) || [])
+                        : ((widget.config?.yCols as string[]) || [])
+                    }
+                    onChange={(vals) =>
+                      patchConfig(widget.type === 'table' ? { columns: vals } : { yCols: vals })
+                    }
+                  />
+                ) : (
+                  <Input
+                    placeholder={widget.type === 'table' ? 'col1, col2, col3' : 'e.g. revenue, profit'}
+                    value={
+                      widget.type === 'table'
+                        ? ((widget.config?.columns as string[]) || []).join(', ')
+                        : ((widget.config?.yCols as string[]) || []).join(', ')
+                    }
+                    onChange={(e) => {
+                      const vals = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                      patchConfig(widget.type === 'table' ? { columns: vals } : { yCols: vals });
+                    }}
+                    className="h-8 text-sm font-mono"
+                  />
+                )}
+              </div>
+
+              {widget.type === 'table' && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Row limit</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={(widget.config?.limit as number) || 100}
+                    onChange={(e) => patchConfig({ limit: parseInt(e.target.value, 10) || 100 })}
+                    className="h-8 text-sm font-mono"
+                  />
+                </div>
+              )}
             </div>
           </>
         )}

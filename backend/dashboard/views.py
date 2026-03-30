@@ -27,25 +27,41 @@ from dashboard.serializers import (
 )
 from django.views import View
 from django.views.static import serve
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 
 from django.conf import settings
 import os
 
 
 def serve_react_assets(request, path):
-    """Vite emits /assets/*.js and /assets/*.css; serve real files, not index.html."""
-    static_assets = os.path.join(settings.STATIC_ROOT, 'assets')
-    root = static_assets if os.path.isdir(static_assets) else os.path.join(settings.REACT_BUILD_DIR, 'assets')
-    return serve(request, path, document_root=root)
+    """
+    Vite emits /assets/*.js and /assets/*.css.
+
+    Try each location where the file actually exists. (Do not use only STATIC_ROOT/assets
+    just because that directory exists — it may be empty after collectstatic while dist/ has
+    the real hashed files. Serving a missing file returns HTML 404 and breaks MIME checks.)
+    """
+    rel = (path or '').replace('..', '').strip('/')
+    asset_roots = [
+        os.path.join(settings.STATIC_ROOT, 'assets'),
+        os.path.join(settings.REACT_BUILD_DIR, 'assets'),
+    ]
+    for root in asset_roots:
+        if not os.path.isdir(root):
+            continue
+        full = os.path.normpath(os.path.join(root, rel))
+        root_norm = os.path.normpath(root)
+        if full.startswith(root_norm) and os.path.isfile(full):
+            return serve(request, rel, document_root=root)
+    raise Http404('Asset not found')
 
 
 def serve_react_file(request, name):
     """Root files from Vite dist (favicon.ico, robots.txt, etc.)."""
     for root in (settings.STATIC_ROOT, settings.REACT_BUILD_DIR):
-        if os.path.isfile(os.path.join(root, name)):
+        if os.path.isdir(root) and os.path.isfile(os.path.join(root, name)):
             return serve(request, name, document_root=root)
-    return serve(request, name, document_root=settings.REACT_BUILD_DIR)
+    raise Http404('File not found')
 
 # Optional ML imports - only use if available
 try:
@@ -169,21 +185,53 @@ def get_timeframe_date_range(timeframe: str):
         return start_date, end_date
 
 
+def _spa_missing_html() -> str:
+    """Explain why :8000 has no UI until a Vite build exists."""
+    dev = getattr(settings, 'FRONTEND_DEV_URL', 'http://localhost:5173')
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Analytics — UI not built</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem;line-height:1.5}}
+code{{background:#f3f4f6;padding:0.1em 0.35em;border-radius:4px}} a{{color:#2563eb}}</style></head>
+<body>
+<h1>Dashboard UI is not on this port yet</h1>
+<p><strong>http://localhost:8000</strong> is mainly the <strong>Django API</strong> (REST, GraphQL, admin).
+The React app is a separate Vite project; it is <strong>not</strong> created by
+<code>collectstatic</code> alone.</p>
+<p><strong>Local development (Docker or host):</strong> open the Vite dev server — usually
+<a href="{dev}">{dev}</a> — that is your live dashboard.</p>
+<p><strong>To serve the same UI from port 8000</strong> (single origin / production-style):</p>
+<ol>
+<li><code>cd new_fronend && npm run build</code> — creates <code>dist/index.html</code></li>
+<li><code>cd backend && python manage.py collectstatic --noinput</code> — copies assets into <code>staticfiles/</code></li>
+<li>Restart Django and reload this page.</li>
+</ol>
+<p>API check: <a href="/api/">/api/</a> · Admin: <a href="/admin/">/admin/</a></p>
+</body></html>"""
+
+
 class FrontendAppView(View):
     def get(self, request):
+        static_idx = os.path.join(settings.STATIC_ROOT, "index.html")
+        react_idx = os.path.join(settings.REACT_BUILD_DIR, "index.html")
         try:
             # Try STATIC_ROOT first (production - after collectstatic)
-            file_path = os.path.join(settings.STATIC_ROOT, 'index.html')
+            file_path = static_idx
             if not os.path.exists(file_path):
-                # Fallback to REACT_BUILD_DIR (development)
-                file_path = os.path.join(settings.REACT_BUILD_DIR, 'index.html')
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return HttpResponse(f.read())
+                file_path = react_idx
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            response = HttpResponse(content, content_type="text/html; charset=utf-8")
+            # Never cache index.html — always serve the latest version so
+            # new JS/CSS filenames (from Vite hashed builds) are picked up immediately.
+            response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response["Pragma"] = "no-cache"
+            response["Expires"] = "0"
+            return response
         except FileNotFoundError:
-            return HttpResponse(
-                "index.html not found. Run 'npm run build' in new_fronend, then 'python manage.py collectstatic' in backend.",
-                status=404,
-            )
+            if getattr(settings, "FRONTEND_ROOT_REDIRECT", False):
+                dev = getattr(settings, "FRONTEND_DEV_URL", "http://localhost:5173")
+                return HttpResponseRedirect(dev)
+            return HttpResponse(_spa_missing_html(), status=404, content_type="text/html; charset=utf-8")
         except Exception as e:
             return HttpResponse(f"Error serving frontend: {str(e)}", status=500)
 

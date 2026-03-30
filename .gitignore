@@ -21,6 +21,12 @@ dist/
 backend/staticfiles/
 *.sqlite3
 
+# Keycloak — config.json holds real credentials, never commit it
+backend/keycloak_auth/config/config.json
+
+# Local debug
+backend/.cursor_debug.ndjson
+
 # IDE / OS
 .idea/
 .vscode/

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Bot, Send, Sparkles, Wand2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Bot, CheckCircle2, Loader2, Send, Sparkles, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,23 +18,28 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { toast } from 'sonner';
+import { buildWidget } from '@/lib/schemaApi';
+import { useDashboardStore } from '@/store/dashboardStore';
 
 type ChatWidgetBuilderProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  activeDatasetSlug?: string;
 };
 
 type ChatMessage = {
   id: string;
   role: 'assistant' | 'user';
   content: string;
+  widgetAdded?: boolean;
 };
 
 const starterPrompts = [
   'Build a revenue bar chart for monthly sales',
   'Create a KPI widget for total orders this week',
-  'Add an insights table for warehouse alerts',
-  'Make a prediction table for next month demand',
+  'Show a line chart of sales over time',
+  'Make a pie chart of orders by category',
 ];
 
 const initialMessages: ChatMessage[] = [
@@ -42,33 +47,112 @@ const initialMessages: ChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'Tell me what widget you want to build, and I can help turn that idea into the next dashboard block.',
+      'Tell me what widget you want to build. I\'ll generate the chart config and add it directly to your dashboard.',
   },
 ];
 
-const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
+const CHART_TYPE_MAP: Record<string, 'bar-chart' | 'line-chart' | 'pie-chart' | 'table' | 'kpi-card'> = {
+  bar_chart: 'bar-chart',
+  line_chart: 'line-chart',
+  pie_chart: 'pie-chart',
+  histogram: 'bar-chart',
+  scatter_plot: 'bar-chart',
+  kpi_card: 'kpi-card',
+  table: 'table',
+};
+
+const ChatWidgetBuilder = ({ open, onOpenChange, activeDatasetSlug }: ChatWidgetBuilderProps) => {
   const isMobile = useIsMobile();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const canSend = input.trim().length > 0;
+  const { addWidget, updateWidget, widgets } = useDashboardStore();
 
-  const assistantReply = useMemo(
-    () =>
-      'Yes — we can build that widget. Describe the widget type, title, and what data you want to show, then the next step can wire it into the dashboard.',
-    [],
-  );
+  const canSend = input.trim().length > 0 && !sending;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const value = input.trim();
-    if (!value) return;
+    if (!value || sending) return;
 
-    setMessages((current) => [
-      ...current,
-      { id: crypto.randomUUID(), role: 'user', content: value },
-      { id: crypto.randomUUID(), role: 'assistant', content: assistantReply },
+    const userMsgId = crypto.randomUUID();
+    const aiMsgId = crypto.randomUUID();
+
+    setMessages(prev => [
+      ...prev,
+      { id: userMsgId, role: 'user', content: value },
     ]);
     setInput('');
+    setSending(true);
+
+    try {
+      const widgetConfig = await buildWidget(value, activeDatasetSlug);
+
+      if (widgetConfig.error) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: aiMsgId,
+            role: 'assistant',
+            content: `I couldn't generate that widget: ${widgetConfig.error}. Try rephrasing your request.`,
+          },
+        ]);
+        return;
+      }
+
+      // Map AI chart type to frontend widget type
+      const widgetType = CHART_TYPE_MAP[widgetConfig.chart_type] || 'bar-chart';
+      addWidget(widgetType);
+
+      // Wire up config after widget is in store
+      setTimeout(() => {
+        const currentWidgets = useDashboardStore.getState().widgets;
+        const newest = currentWidgets[currentWidgets.length - 1];
+        if (newest) {
+          updateWidget(newest.id, {
+            title: widgetConfig.title || 'New Widget',
+            dataSource: activeDatasetSlug ? 'schema-kpi' : newest.dataSource,
+            config: {
+              ...widgetConfig.config,
+              datasetSlug: widgetConfig.dataset || activeDatasetSlug,
+              xCol: widgetConfig.query?.x_col,
+              yCols: widgetConfig.query?.y_cols,
+              aggregation: widgetConfig.query?.aggregation,
+            },
+          });
+        }
+      }, 50);
+
+      const chartLabel = widgetConfig.chart_type?.replace('_', ' ') || 'widget';
+      setMessages(prev => [
+        ...prev,
+        {
+          id: aiMsgId,
+          role: 'assistant',
+          content: `Done! I added a **${chartLabel}** titled "${widgetConfig.title}" to your dashboard. You can drag, resize, or configure it in the inspector.`,
+          widgetAdded: true,
+        },
+      ]);
+
+      toast.success(`"${widgetConfig.title}" added to dashboard`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      setMessages(prev => [
+        ...prev,
+        {
+          id: aiMsgId,
+          role: 'assistant',
+          content: `Sorry, I ran into an error: ${msg}. Make sure the AI backend is running (Ollama).`,
+        },
+      ]);
+    } finally {
+      setSending(false);
+      // Scroll to bottom
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      }, 100);
+    }
   };
 
   const panelBody = (
@@ -81,7 +165,12 @@ const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
               Widget Builder Chat
             </div>
             <p className="text-sm text-muted-foreground">
-              Ask for a chart, KPI, prediction table, or insight widget.
+              Describe a chart and I'll build it instantly.
+              {activeDatasetSlug && (
+                <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono text-primary">
+                  {activeDatasetSlug}
+                </span>
+              )}
             </p>
           </div>
           {isMobile && (
@@ -100,8 +189,9 @@ const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
               type="button"
               variant="outline"
               size="sm"
-              className="h-auto whitespace-normal rounded-full px-3 py-2 text-left"
+              className="h-auto whitespace-normal rounded-full px-3 py-2 text-left text-xs"
               onClick={() => setInput(prompt)}
+              disabled={sending}
             >
               {prompt}
             </Button>
@@ -109,7 +199,7 @@ const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1 px-4 py-4">
+      <ScrollArea className="min-h-0 flex-1 px-4 py-4" ref={scrollRef}>
         <div className="space-y-4 pb-2">
           {messages.map((message) => (
             <div
@@ -127,34 +217,51 @@ const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
                 <div className="mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   {message.role === 'assistant' ? <Bot className="h-3.5 w-3.5" /> : <Wand2 className="h-3.5 w-3.5" />}
                   {message.role}
+                  {message.widgetAdded && (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  )}
                 </div>
-                <p className="leading-relaxed">{message.content}</p>
+                <p className="leading-relaxed whitespace-pre-wrap">{message.content}</p>
               </div>
             </div>
           ))}
+          {sending && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl border border-border bg-card px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  AI is building your widget…
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
       <form
         className="border-t border-border p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          handleSend();
-        }}
+        onSubmit={(e) => { e.preventDefault(); handleSend(); }}
       >
         <div className="space-y-3">
           <Textarea
             value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Example: Create an insights table for low-stock products with severity labels"
-            className="min-h-[110px] resize-none"
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Example: Create a bar chart showing revenue by month"
+            className="min-h-[90px] resize-none"
+            disabled={sending}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
           />
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
-              This is the first UI step for prompt-to-widget creation.
+              Powered by Ollama · Enter to send
             </p>
             <Button type="submit" className="gap-2" disabled={!canSend}>
-              <Send className="h-4 w-4" />
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send
             </Button>
           </div>
@@ -169,7 +276,7 @@ const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
         <DrawerContent className="max-h-[88vh] px-0">
           <DrawerHeader className="sr-only">
             <DrawerTitle>Widget Builder Chat</DrawerTitle>
-            <DrawerDescription>Open a chat window to request new dashboard widgets.</DrawerDescription>
+            <DrawerDescription>Request new dashboard widgets using natural language.</DrawerDescription>
           </DrawerHeader>
           {panelBody}
         </DrawerContent>
@@ -182,7 +289,7 @@ const ChatWidgetBuilder = ({ open, onOpenChange }: ChatWidgetBuilderProps) => {
       <SheetContent side="right" className="w-full p-0 sm:max-w-xl">
         <SheetHeader className="sr-only">
           <SheetTitle>Widget Builder Chat</SheetTitle>
-          <SheetDescription>Open a chat window to request new dashboard widgets.</SheetDescription>
+          <SheetDescription>Request new dashboard widgets using natural language.</SheetDescription>
         </SheetHeader>
         {panelBody}
       </SheetContent>

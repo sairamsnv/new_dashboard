@@ -86,34 +86,10 @@ export const DATASET_PRESETS: {
     forTypes: ['kpi-card'],
   },
   {
-    value: 'wms-warehouse-ops-bar',
-    label: 'WMS · Warehouse ops (by month)',
-    hint: 'Picked / packed / received trend',
-    forTypes: ['bar-chart'],
-  },
-  {
-    value: 'wms-so-po-lines',
-    label: 'WMS · Sales & purchase orders',
-    hint: 'Open SO / PO lines by month',
-    forTypes: ['line-chart'],
-  },
-  {
-    value: 'wms-employee-pie',
-    label: 'WMS · Labor mix',
-    hint: 'Employee performance split',
-    forTypes: ['pie-chart'],
-  },
-  {
-    value: 'wms-orders-table',
-    label: 'WMS · Orders',
-    hint: 'Picked / packed / received orders',
-    forTypes: ['table'],
-  },
-  {
-    value: 'wms-insights-table',
-    label: 'WMS · Insights & recommendations',
-    hint: 'Recommendations for the selected period',
-    forTypes: ['insights-table'],
+    value: 'schema-data',
+    label: 'Uploaded dataset',
+    hint: 'Data from your uploaded CSV / Excel file',
+    forTypes: ['bar-chart', 'line-chart', 'pie-chart', 'table'],
   },
 ];
 

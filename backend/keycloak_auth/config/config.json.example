@@ -1,0 +1,11 @@
+{
+    "oauthAppClientId": "analytics-dashboard",
+    "oauthAppClientSecret": "your-keycloak-client-secret-here",
+    "oauthProviderDiscoveryUrl": "http://localhost:8080/realms/analytics/.well-known/openid-configuration",
+    "keycloakAdminUsername": "admin",
+    "keycloakAdminPassword": "your-keycloak-admin-password-here",
+    "googleClientId": "",
+    "googleClientSecret": "",
+    "githubClientId": "",
+    "githubClientSecret": ""
+}
